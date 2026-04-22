@@ -1,0 +1,26 @@
+import cv2
+
+class StereoCamera:
+    def __init__(self, port_left=0, port_right=2, width=320, height=240):
+        self.cap_left = cv2.VideoCapture(port_left)
+        print("Left camera connected")
+        self.cap_right = cv2.VideoCapture(port_right)
+        print("Right camera connected")
+        
+        # Lower resolution is critical for 2 USB cameras on a Pi
+        for cap in [self.cap_left, self.cap_right]:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            
+    def get_frames(self):
+        # Grab simultaneously to minimize time delay between the two frames
+        ret_l, frame_l = self.cap_left.read()
+        ret_r, frame_r = self.cap_right.read()
+        
+        if not ret_l or not ret_r:
+            return None, None
+        return frame_l, frame_r
+        
+    def release(self):
+        self.cap_left.release()
+        self.cap_right.release()
