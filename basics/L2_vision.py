@@ -3,7 +3,7 @@ import numpy as np
 
 # --- STEREO CALIBRATION CONSTANTS ---
 # You must calibrate these for your specific cameras!
-BASELINE_MM = 95.0  # Distance between the two camera lenses in mm
+BASELINE_MM = 225.0  # Distance between the two camera lenses in mm
 FOCAL_LENGTH_PIXELS = 350.0  # Estimated. Requires camera calibration to get exact number.
 
 # HSV Filter Ranges for Calibration

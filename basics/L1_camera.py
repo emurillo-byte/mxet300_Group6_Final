@@ -6,6 +6,8 @@ class StereoCamera:
         print("Left camera connected")
         self.cap_right = cv2.VideoCapture(port_right)
         print("Right camera connected")
+        self.target_width = width
+        self.target_height = height
         
         # Lower resolution is critical for 2 USB cameras on a Pi
         for cap in [self.cap_left, self.cap_right]:
@@ -19,7 +21,18 @@ class StereoCamera:
         
         if not ret_l or not ret_r:
             return None, None
-        return frame_l, frame_r
+        
+        # --- THE FIX: FORCE IDENTICAL RESOLUTIONS ---
+        # This guarantees both coordinate planes are exactly 320x240 (or your chosen size)
+        # regardless of what the physical hardware sensors captured.
+        frame_l_resized = cv2.resize(frame_l, (self.target_width, self.target_height))
+        frame_r_resized = cv2.resize(frame_r, (self.target_width, self.target_height))
+
+        # ROTATE THE IMAGES 90 DEGREES TO MATCH THE PHYSICAL ORIENTATION OF THE CAMERAS ---
+        frame_l_rotated = cv2.rotate(frame_l, cv2.ROTATE_90_CLOCKWISE)
+        frame_r_rotated = cv2.rotate(frame_r, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        
+        return frame_l_rotated, frame_r_rotated
         
     def release(self):
         self.cap_left.release()
