@@ -1,7 +1,7 @@
 import cv2
 
 class StereoCamera:
-    def __init__(self, port_left=0, port_right=2, width=320, height=240):
+    def __init__(self, port_left=2, port_right=0, width=320, height=240):
         self.cap_left = cv2.VideoCapture(port_left)
         print("Left camera connected")
         self.cap_right = cv2.VideoCapture(port_right)
@@ -21,14 +21,8 @@ class StereoCamera:
         
         if not ret_l or not ret_r:
             return None, None
-        
-        # --- THE FIX: FORCE IDENTICAL RESOLUTIONS ---
-        # This guarantees both coordinate planes are exactly 320x240 (or your chosen size)
-        # regardless of what the physical hardware sensors captured.
-        frame_l_resized = cv2.resize(frame_l, (self.target_width, self.target_height))
-        frame_r_resized = cv2.resize(frame_r, (self.target_width, self.target_height))
 
-        # ROTATE THE IMAGES 90 DEGREES TO MATCH THE PHYSICAL ORIENTATION OF THE CAMERAS ---
+        # rotates cameras to fit the installation orientation 
         frame_l_rotated = cv2.rotate(frame_l, cv2.ROTATE_90_CLOCKWISE)
         frame_r_rotated = cv2.rotate(frame_r, cv2.ROTATE_90_COUNTERCLOCKWISE)
         
