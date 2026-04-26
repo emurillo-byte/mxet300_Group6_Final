@@ -56,13 +56,13 @@ def move_backward(speed=0.2):
 def turn_right(speed=0.2):
     m.sendLeft(0.8)
     m.sendRight(-0.8)
-    print("Turning left")
+    print("Turning right")
 
 
 def turn_left(speed=0.2):
     m.sendLeft(-0.8)
     m.sendRight(0.8)
-    print("Turning right")
+    print("Turning left")
 
 
 def stop():

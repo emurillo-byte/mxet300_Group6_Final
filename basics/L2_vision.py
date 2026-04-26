@@ -21,97 +21,112 @@ HSV_FILTERS = {
         "upper": np.array([45, 90, 255]),
     },
 }
-
-# Background subtractor to detect moving (dynamic) obstacles
+# Background subtractor for dynamic obstacles
 bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=50, detectShadows=False)
 
-def get_color_mask(frame, lower_hsv, upper_hsv):
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    return cv2.inRange(hsv, lower_hsv, upper_hsv)
-
-def _get_largest_contour_center(mask):
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None, 0
+def get_physical_coordinates(cx_left, cx_right, frame_width):
+    disparity = cx_left - cx_right
+    if disparity <= 0:
+        return float('inf'), 0.0 
+        
+    # X: Forward distance in mm
+    x_forward_mm = (BASELINE_MM * FOCAL_LENGTH_PIXELS) / disparity
     
-    largest_contour = max(contours, key=cv2.contourArea)
-    area = cv2.contourArea(largest_contour)
-    if area > 300:  # Minimum size to avoid noise
-        M = cv2.moments(largest_contour)
-        if M["m00"] != 0:
-            cx = int(M["m10"] / M["m00"])
-            cy = int(M["m01"] / M["m00"])
-            return (cx, cy), area
-    return None, 0
+    # Y: Lateral offset in mm (Negative = Left, Positive = Right)
+    center_pixel = frame_width / 2.0
+    pixel_offset = cx_left - center_pixel
+    y_lateral_mm = (pixel_offset * x_forward_mm) / FOCAL_LENGTH_PIXELS
+    
+    return x_forward_mm, y_lateral_mm
 
-def find_target_object(frame):
-    # Generalized target object detection using HSV filters
+def process_target_location(frame_left, frame_right, target_function):
+    # Passes frames to your detection function
+    center_left = target_function(frame_left)
+    center_right = target_function(frame_right)
+    
+    if center_left and center_right:
+        frame_width = frame_left.shape[1]
+        x_mm, y_mm = get_physical_coordinates(center_left[0], center_right[0], frame_width)
+        return x_mm, y_mm
+    return None, None
+
+# --- CORE HSV DETECTION LOGIC ---
+def find_color_center(frame, lower_hsv, upper_hsv, min_area=500):
+    """
+    Converts frame to HSV, masks out the target color, and returns the (x, y) 
+    pixel coordinates of the center of the largest object.
+    """
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, HSV_FILTERS["target_object"]["lower"], HSV_FILTERS["target_object"]["upper"])
-    return _get_largest_contour_center(mask)
+    mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+    
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(largest_contour) > min_area:
+            M = cv2.moments(largest_contour)
+            if M["m00"] != 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                return (cx, cy)
+                
+    return None
+
+# --- SPECIFIC TARGET FUNCTIONS ---
+def find_target_object(frame):
+    return find_color_center(
+        frame, 
+        HSV_FILTERS["target_object"]["lower"], 
+        HSV_FILTERS["target_object"]["upper"], 
+        min_area=800
+    )
 
 def find_target_area(frame):
-    # Generalized target area detection using HSV filters
-    lower_color = HSV_FILTERS["target_area"]["lower"]
-    upper_color = HSV_FILTERS["target_area"]["upper"]
-    mask = get_color_mask(frame, lower_color, upper_color)
-    return _get_largest_contour_center(mask)
+    return find_color_center(
+        frame, 
+        HSV_FILTERS["target_area"]["lower"], 
+        HSV_FILTERS["target_area"]["upper"], 
+        min_area=1500
+    )
 
+# Alias to keep compatibility with older scripts that might still use the old name
+find_landing_zone = find_target_area
+
+# --- HAZARD DETECTION ---
 def detect_yellow_tape(frame):
-    lower_yellow = HSV_FILTERS["yellow_tape"]["lower"]
-    upper_yellow = HSV_FILTERS["yellow_tape"]["upper"]
-    mask = get_color_mask(frame, lower_yellow, upper_yellow)
+    """
+    Looks for a large yellow blob, but ONLY in the bottom 40% of the camera view
+    where the floor actually is.
+    """
+    h, w = frame.shape[:2]
+    bottom_half = frame[int(h*0.6):h, :]
     
-    # Only check the bottom half of the image (ground)
-    h, w = mask.shape
-    bottom_half = mask[int(h * 0.6):h, :]
-    if cv2.countNonZero(bottom_half) > 1000:  # Trigger threshold for tape
+    center = find_color_center(
+        bottom_half, 
+        HSV_FILTERS["yellow_tape"]["lower"], 
+        HSV_FILTERS["yellow_tape"]["upper"], 
+        min_area=1000
+    )
+    
+    if center is not None:
         return True
     return False
 
 def detect_dynamic_obstacles(frame):
     fg_mask = bg_subtractor.apply(frame)
-    # Filter noise
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
-    
-    # If a significant number of pixels are moving, there's a dynamic obstacle
     if cv2.countNonZero(fg_mask) > 5000: 
         return True
     return False
 
 def detect_static_obstacles(frame):
-    # Use Canny edge detection for large feature outlines (boxes, walls)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (7, 7), 0)
     edges = cv2.Canny(blurred, 50, 150)
     
-    # Look at the center-forward trajectory area
     h, w = edges.shape
-    roi = edges[int(h * 0.3):int(h * 0.7), int(w * 0.2):int(w * 0.8)]
-    if cv2.countNonZero(roi) > 3000:  # Substantial blocking edges
+    roi = edges[int(h*0.3):int(h*0.7), int(w*0.2):int(w*0.8)]
+    if cv2.countNonZero(roi) > 3000:
         return True
     return False
-
-def calculate_depth(cx_left, cx_right):
-    """Calculates distance in millimeters using stereo disparity."""
-    disparity = cx_left - cx_right
-    
-    # Avoid division by zero if the object is infinitely far away or math fails
-    if disparity <= 0:
-        return float('inf') 
-        
-    distance_mm = (BASELINE_MM * FOCAL_LENGTH_PIXELS) / disparity
-    return distance_mm
-
-def get_stereo_target_distance(frame_left, frame_right, target_function):
-    """Passes both frames to a detection function and calculates depth."""
-    center_left, _ = target_function(frame_left)
-    center_right, _ = target_function(frame_right)
-    
-    if center_left and center_right:
-        # Calculate distance
-        distance = calculate_depth(center_left[0], center_right[0])
-        # Return the left center for steering, and the actual distance for stopping
-        return center_left, distance
-    return None, None
