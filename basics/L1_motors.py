@@ -16,6 +16,9 @@ left_chB  = pwm(18, frequency=frq,initial_value=0)     # PIN 12        GPIO18
 right_chA = pwm(22, frequency=frq,initial_value=0)     # PIN 15        GPIO22
 right_chB = pwm(23, frequency=frq,initial_value=0)     # PIN 16        GPIO23
 
+lift_chA = pwm(26, frequency=frq,initial_value=0)     # PIN 15        GPIO22
+lift_chB = pwm(20, frequency=frq,initial_value=0)     # PIN 16        GPIO23
+
 def computePWM(speed):              # take an argument in range [-1,1]
     if speed == 0:
         x = np.array([0,0])         # set all PWM to zero
@@ -37,19 +40,40 @@ def sendRight(mySpeed):         # takes at least 0.3 ms
     right_chB.value = myPWM[0]
     right_chA.value = myPWM[1]
 
+def lift(mySpeed):         # takes at least 0.3 ms
+    myPWM = computePWM(mySpeed)
+    lift_chB.value = myPWM[0]
+    lift_chA.value = myPWM[1]
+
 # THIS LOOP ONLY RUNS IF THE PROGRAM IS CALLED DIRECTLY
 if __name__ == "__main__":
     myRate = 0.
     while(1):
-        print("motors.py: driving fwd")
-        sendLeft(0.8)
-        sendRight(0.8)
-        time.sleep(4)                       # run fwd for 4 seconds
-        print("motors.py: driving reverse")
-        sendLeft(-0.8)
-        sendRight(-0.8)
-        time.sleep(4)                       # run reverse for 4 seconds
+        # print("motors.py: driving fwd")
+        # sendLeft(0.8)
+        # sendRight(0.8)
+        # time.sleep(4)                       # run fwd for 4 seconds
+        # print("motors.py: driving reverse")
+        # sendLeft(-0.8)
+        # sendRight(-0.8)
+        # time.sleep(4)                       # run reverse for 4 seconds
+        
+        print("motors.py: lift up")
+        lift(0.4)
+        time.sleep(2)
+
         print("stopping motors 4 seconds")
         sendLeft(0)
         sendRight(0)
+        lift(0)
+        time.sleep(3)
+        
+        print("motors.py: lift down")
+        lift(-0.4)
+        time.sleep(0.5)
+        print("stopping motors 4 seconds")
+        sendLeft(0)
+        sendRight(0)
+        lift(0)
+        
         time.sleep(4)

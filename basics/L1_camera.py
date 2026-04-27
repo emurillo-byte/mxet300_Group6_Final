@@ -1,5 +1,6 @@
 import cv2
 
+
 class StereoCamera:
     def __init__(self, port_left=2, port_right=0, width=320, height=240):
         self.cap_left = cv2.VideoCapture(port_left)

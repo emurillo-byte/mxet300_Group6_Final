@@ -99,7 +99,7 @@ def detect_yellow_tape(frame):
     where the floor actually is.
     """
     h, w = frame.shape[:2]
-    bottom_half = frame[int(h*0.6):h, :]
+    bottom_half = frame[int(h*0.85):h, :]
     
     center = find_color_center(
         bottom_half, 

@@ -4,18 +4,24 @@ import L2_vision as vision
 import L1_motors as m
 # State Definitions
 SEARCH = 1
-APPROACH = 2
-PICKUP = 3
-NAVIGATE_TO_DROP = 4
-DROP = 5
-IDLE = 6
+PICKUP = 2
+NAVIGATE_TO_DROP = 3
+DROP = 4
+IDLE = 5
 
 
 searchattempts = 0
-
-
 state = SEARCH
 previous_state = SEARCH
+
+# Parameters
+CENTER_TOLERANCE = 40       # mm of acceptable lateral error
+PICK_DIST_MAX = 20          # mm distance to stop at for pickup
+PICK_DIST_MIN = 10          # mm distance to stop at for pickup
+
+# FIXED: Added missing constants for the drop zone
+DROP_ZONE_CENTER_TOLERANCE = 40
+DROP_ZONE_TARGET_DIST_MAX = 150
 
 
 # #Move around obsticale
@@ -32,12 +38,6 @@ previous_state = SEARCH
 #     [0.4, 0.0, 1.25],            
 # ]
 
-
-
-
-# Parameters
-CENTER_TOLERANCE = 40
-TARGET_REACHED_DIST = 150  # mm (experimentally tune later)
 
 
 # Low level motor functions (replace with L1.py later)
@@ -111,102 +111,68 @@ def avoid_obstacle():
     stop()
 
 
-# State 1: SEARCH
+# State 1: SEARCH (Find Obj and go near it)
 def search_state(frame_left, frame_right):
-    center, distance = vision.get_stereo_target_distance(
-        frame_left, frame_right, vision.find_target_object
-    )
+    obj_x_mm, obj_y_mm = vision.process_target_location(cam_left, cam_right, vision.find_target_object(frame)) # change the input of vision.find_target_object()
 
-
-    searchattempts += 1
-    if searchattempts >= 4: #if robot has tried searching 4 times in a row it needs to move
+    if obj_y_mm >= 5:
+        turn_right()
+    elif obj_y_mm <= -5:
+        turn_left()
+    elif obj_x_mm > PICK_DIST_MAX :
         move_forward()
-        if obstacle_detected(frame_left):
-            avoid_obstacle()
-        searchattempts = 0
-
-
-    if center is not None:
-        print("Target found → switching to APPROACH")
-        searchattempts = 0
-        return APPROACH
-
-
-    # Rotate to scan environment
-    turn_left()
-    time.sleep(2.5)
-    stop()
-
+    elif obj_x_mm < PICK_DIST_MIN:
+        move_backward()
+    elif obj_y_mm <= 5 and obj_y_mm >= -5 and obj_x_mm <= PICK_DIST_MAX and drop_x_mm >= PICK_DIST_MIN:
+        stop()
+        return PICKUP
+    else:
+        searchattempts += 1
+        # Object not visible — rotate in place to search
+        print("Object not visible → searching...")
+       
+        if searchattempts >= 4: #if robot has tried searching 4 times in a row it needs to move
+            move_forward()
+            if obstacle_detected(frame_left):
+                avoid_obstacle()
+            searchattempts = 0
+        else:
+            turn_left()
+            time.sleep(2.5)
+            stop()
 
     return SEARCH
 
-
-# State 2: APPROACH
-def approach_state(frame_left, frame_right):
-    center, distance = vision.get_stereo_target_distance(
-        frame_left, frame_right, vision.find_target_object
-    )
-
-
-    if center is None:
-        print("Lost target → back to SEARCH")
-        return SEARCH
-
-
-    cx, _ = center
-    frame_width = frame_left.shape[1]
-    error = get_center_error(cx, frame_width)
-
-
-    # Steering control
-    if abs(error) > CENTER_TOLERANCE:
-        if error > 0:
-            turn_right()
-        else:
-            turn_left()
-    else:
-        move_forward()
-
-
-    # Stop condition using stereo depth
-    if distance is not None and distance < TARGET_REACHED_DIST:
-        print("Target reached → PICKUP")
-        stop()
-        return PICKUP
-
-
-    return APPROACH
-
-
-# State 3: PICKUP
+# State 2: PICKUP
 def pickup_state():
     print("Picking up object")
     stop()
 
-
-    lower_fork()
-    time.sleep(1)
-
-
-    move_forward()
-    time.sleep(1)
-    stop()
-
-
-    lift_fork()
-    time.sleep(1)
-
+    m.lift(0.4)  # up speed
+    time.sleep(2)
+    m.lift(0)    # stop lift
 
     return NAVIGATE_TO_DROP
 
 
-# State 4: NAVIGATE TO DROP
+# State 3: NAVIGATE TO DROP
 def navigate_to_drop_state(frame_left, frame_right):
-    center, distance_mm = vision.get_stereo_target_distance(
-        frame_left, frame_right, vision.find_target_area
-    )
-    searchattempts += 1
-    if center is None:
+    drop_x_mm, drop_y_mm = vision.process_target_location(cam_left, cam_right, vision.find_target_area(frame)) # change the input of vision.find_target_area()
+
+    if drop_y_mm >= 5:
+        turn_right()
+    elif drop_y_mm <= -5:
+        turn_left()
+
+    elif drop_x_mm > DROP_ZONE_TARGET_DIST_MAX :
+        move_forward()
+    elif drop_x_mm < DROP_ZONE_TARGET_DIST_MIN:
+        move_backward()
+    elif drop_y_mm <= 5 and drop_y_mm >= -5 and drop_x_mm <= DROP_ZONE_TARGET_DIST_MAX and drop_x_mm >= DROP_ZONE_TARGET_DIST_MIN:
+        stop()
+        return DROP
+    else:
+        searchattempts += 1
         # Drop zone not visible — rotate in place to search
         print("Drop zone not visible → searching...")
        
@@ -220,55 +186,36 @@ def navigate_to_drop_state(frame_left, frame_right):
             time.sleep(2.5)
             stop()
 
+    return NAVIGATE_TO_DROP
 
-        return NAVIGATE_TO_DROP
-
-
-    cx, _ = center
-    frame_width = frame_left.shape[1]
-    error = get_center_error(cx, frame_width)
-
-
-    print(f"Drop zone detected | error={error:.1f}px | distance={distance_mm:.0f}mm")
-
-
-    # Step 1: Align laterally before advancing
-    if abs(error) > DROP_ZONE_CENTER_TOLERANCE:
-        if error > 0:
-            turn_right()
-        else:
-            turn_left()
-        return NAVIGATE_TO_DROP
-
-
-    # Step 2: Aligned — check depth and move forward or stop
-    if distance_mm is None or distance_mm > DROP_ZONE_TARGET_DISTANCE_MM:
-        move_forward()
-        return NAVIGATE_TO_DROP
-
-
-    # Step 3: Aligned and close enough — in position
-    print("At drop zone → transitioning to DROP")
-    stop()
-    return DROP
-
-
-# State 5: DROP
+# State 4: DROP
 def drop_state():
     print("Dropping object")
-
-
     stop()
-    lower_fork()
-    time.sleep(1)
+
+    m.lift(-0.4)  # down speed
+    time.sleep(2)
+    m.lift(0)    # stop lift
 
 
     move_backward()
-    time.sleep(1)
+    time.sleep(2)
+    turn_right()
+    time.sleep(3)   # time taken to make a u-turn
 
+    obj_left -= 1
 
-    stop()
-    return IDLE
+    if obj_left == 0:
+        print("All objects delivered → transitioning to IDLE")
+        stop()
+        return IDLE
+    elif obj_left < 0:
+        print("Error: obj_left went negative!")
+        stop()
+        return IDLE
+    else:
+        print(f"{obj_left} objects remaining → transitioning to SEARCH")
+        return SEARCH
 
 
 # Main loop
@@ -295,10 +242,6 @@ def main_loop(camera_left, camera_right):
         # --- FSM EXECUTION ---
         if state == SEARCH:
             state = search_state(frame_left, frame_right)
-
-
-        elif state == APPROACH:
-            state = approach_state(frame_left, frame_right)
 
 
         elif state == PICKUP:
