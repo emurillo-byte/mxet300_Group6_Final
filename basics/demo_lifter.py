@@ -2,26 +2,30 @@ import time
 import L1_motor as m
 
 # --- CONSTANTS ---
-LIFT_SPEED = 0.8     # Adjust based on motor strength
-LIFT_DURATION = 2.0  # Seconds to let the lift motor run
+LIFT_UP_SPEED = 0.6     # Adjust based on motor strength
+LIFT_DOWN_SPEED = -0.4     # Adjust based on motor strength
+LIFT_UP_DURATION = 0.5  # Seconds to let the lift motor run
+LIFT_DOWN_DURATION = 0.4  # Seconds to let the lift motor run
+
 DRIVE_SPEED = 0.5    # Speed for the wheels
 DRIVE_TIME = 2.0     # How long to drive forward to scoop the object
 
 def lower_fork():
     print("[ACTION] Lowering fork...")
-    m.lift(-LIFT_SPEED) 
-    time.sleep(LIFT_DURATION)
+    m.lift(LIFT_DOWN_SPEED) 
+    time.sleep(LIFT_DOWN_DURATION)
     m.lift(0) # Stop lift
 
 def lift_fork():
     print("[ACTION] Lifting fork...")
-    m.lift(LIFT_SPEED)
-    time.sleep(LIFT_DURATION)
+    m.lift(LIFT_UP_SPEED)
+    time.sleep(LIFT_UP_DURATION)
     m.lift(0) # Stop lift
 
 def drive(speed, duration):
     """Helper function to drive for a set amount of time and stop."""
-    m.set_speeds(speed, speed)
+    m.sendLeft(speed)
+    m.sendRight(speed)
     time.sleep(duration)
     m.stop()
 
@@ -32,14 +36,13 @@ def demo_sequence():
 
     # Step 1: Reset position
     print("\n--- Step 1: Preparing ---")
-    lower_fork()
     time.sleep(1)
 
     # Step 2: Scoop
     print("\n--- Step 2: Scooping Object ---")
     print("Driving forward...")
     drive(DRIVE_SPEED, DRIVE_TIME) 
-    time.sleep(0.5) # Brief pause for dramatic effect
+    time.sleep(0.5)
 
     # Step 3: Lift
     print("\n--- Step 3: Lifting Object ---")

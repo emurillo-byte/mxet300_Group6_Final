@@ -2,6 +2,8 @@ import time
 import random
 import L2_vision as vision
 import L1_motor as m
+import L1_camera
+
 # State Definitions
 SEARCH = 1
 PICKUP = 2
@@ -9,59 +11,42 @@ NAVIGATE_TO_DROP = 3
 DROP = 4
 IDLE = 5
 
+cam = L1_camera.StereoCamera()
 
 searchattempts = 0
 state = SEARCH
 previous_state = SEARCH
+move_counter = 0
 
 # Parameters
-CENTER_TOLERANCE = 40       # mm of acceptable lateral error
-PICK_DIST_MAX = 20          # mm distance to stop at for pickup
-PICK_DIST_MIN = 10          # mm distance to stop at for pickup
+PICK_DIST_MAX = 700          # mm distance to stop at for pickup
+PICK_DIST_MIN = 500        # mm distance to stop at for pickup
 
-# FIXED: Added missing constants for the drop zone
-DROP_ZONE_CENTER_TOLERANCE = 40
-DROP_ZONE_TARGET_DIST_MAX = 150
-
-
-# #Move around obsticale
-# motions = [
-#     [0.0, turn_90, 1.5],            # Motion 1
-#     [0.4, 0, 1.25],            # Motion 2
-#     [0.0, turn_90, 1.5],            # Motion 3
-#     [0.4, 0, 1.25],            # Motion 1
-#     [0.0, turn_90, 1.5],            # Motion 2
-#     [0.4, 0.0, 1.25],
-#     [0.0, -turn_90, 1.5],            
-#     [0.4, 0.0, 1.25],            
-#     [0.0, -turn_90, 1.5],
-#     [0.4, 0.0, 1.25],            
-# ]
-
+DROP_ZONE_TARGET_DIST_MAX = 150 #mm distance to stop at for dropoff
 
 
 # Low level motor functions (replace with L1.py later)
 def move_forward(speed=0.2):
-    m.sendLeft(0.8)
-    m.sendRight(0.8)
+    m.sendLeft(0.6)
+    m.sendRight(0.9)
     print("Moving forward")
 
 
 def move_backward(speed=0.2):
-    m.sendLeft(-0.8)
-    m.sendRight(-0.8)
+    m.sendLeft(-0.6)
+    m.sendRight(-0.9)
     print("Moving backward")
 
 
-def turn_right(speed=0.2):
-    m.sendLeft(0.8)
-    m.sendRight(-0.8)
+def turn_right(speed=0.05):
+    m.sendLeft(0.5)
+    m.sendRight(-0.5)
     print("Turning right")
 
 
-def turn_left(speed=0.2):
-    m.sendLeft(-0.8)
-    m.sendRight(0.8)
+def turn_left(speed=0.05):
+    m.sendLeft(-0.5)
+    m.sendRight(0.5)
     print("Turning left")
 
 
@@ -79,87 +64,111 @@ def lower_fork():
 def lift_fork():
     print("Lifting fork")
 
-
-#Utility functions
-def get_center_error(cx, frame_width):
-    return cx - frame_width // 2
-
-
 # TOP PRIORITY - Obstacle Handling
-def obstacle_detected(frame): #true if object or false if no object
+def obstacle_detected(f_left): #true if object or false if no object, !!! has bias towards left camera
     return (
-        vision.detect_yellow_tape(frame) or
-        vision.detect_dynamic_obstacles(frame) or
-        vision.detect_static_obstacles(frame)
+        vision.detect_yellow_tape(f_left) or
+        vision.detect_yellow_obstacle(f_left)
     )
 
 
 def avoid_obstacle():
     print("Obstacle detected → avoiding")
     stop()
-    move_backward()
-    time.sleep(0.5)
-
-
-    if random.random() > 0.5:
-        turn_left()
-    else:
-        turn_right()
-
-
+    time.sleep(1)
+    turn_left()
     time.sleep(0.5)
     stop()
 
 
 # State 1: SEARCH (Find Obj and go near it)
-def search_state(frame_left, frame_right):
-    obj_x_mm, obj_y_mm = vision.process_target_location(cam_left, cam_right, vision.find_target_object(frame)) # change the input of vision.find_target_object()
+def search_state(f_left,f_right):
+    global searchattempts
 
-    if obj_y_mm >= 5:
-        turn_right()
-    elif obj_y_mm <= -5:
-        turn_left()
-    elif obj_x_mm > PICK_DIST_MAX :
-        move_forward()
-    elif obj_x_mm < PICK_DIST_MIN:
-        move_backward()
-    elif obj_y_mm <= 5 and obj_y_mm >= -5 and obj_x_mm <= PICK_DIST_MAX and drop_x_mm >= PICK_DIST_MIN:
-        stop()
-        return PICKUP
-    else:
+    obj_x_mm, obj_y_mm = vision.process_target_location(f_left, f_right, vision.find_target_object)
+    print(f"obj x: ",obj_x_mm, f", obj y: ", obj_y_mm)
+
+    if obj_y_mm is None or obj_x_mm is None:
         searchattempts += 1
         # Object not visible — rotate in place to search
         print("Object not visible → searching...")
        
-        if searchattempts >= 4: #if robot has tried searching 4 times in a row it needs to move
-            move_forward()
-            if obstacle_detected(frame_left):
-                avoid_obstacle()
+        print("Search Attempts:", searchattempts),
+
+        if searchattempts >= 30: #if robot has tried searching 4 times in a row it needs to move
+            for move_counter in range(30):
+                move_forward()
+                if obstacle_detected(f_left):
+                    avoid_obstacle()
+                move_counter +=1
+                time.sleep(0.1)
             searchattempts = 0
+            move_counter = 0
         else:
             turn_left()
-            time.sleep(2.5)
+            time.sleep(0.5)
             stop()
+            time.sleep(0.3)
+    
+    elif obj_y_mm >= 70:
+        turn_right(0.03)
+        time.sleep(0.05)
+        stop()
+        time.sleep(0.05)
+    elif obj_y_mm <= 45:
+        turn_left(0.03)
+        time.sleep(0.05)
+        stop()
+        time.sleep(0.05)
+    elif obj_x_mm > PICK_DIST_MAX:
+        move_forward()
+    elif obj_x_mm < PICK_DIST_MIN:
+        move_backward()
+    elif obj_y_mm <= 65 and obj_y_mm >= 50 and obj_x_mm <= PICK_DIST_MAX and obj_x_mm >= PICK_DIST_MIN:
+        stop()
+        return PICKUP
 
     return SEARCH
 
 # State 2: PICKUP
 def pickup_state():
-    print("Picking up object")
-    stop()
-
-    m.lift(0.4)  # up speed
+    
+    move_forward()
     time.sleep(2)
+    stop()
+    
+    print("Picking up object")
+    m.lift(0.7)  # up speed
+    time.sleep(0.5)
     m.lift(0)    # stop lift
 
     return NAVIGATE_TO_DROP
 
 
 # State 3: NAVIGATE TO DROP
-def navigate_to_drop_state(frame_left, frame_right):
-    drop_x_mm, drop_y_mm = vision.process_target_location(cam_left, cam_right, vision.find_target_area(frame)) # change the input of vision.find_target_area()
+def navigate_to_drop_state(f_left,f_right):
+    global searchattempts
 
-    if drop_y_mm >= 5:
+    drop_x_mm, drop_y_mm = vision.process_target_location(f_left, f_right, vision.find_target_area)
+    print(f"drop x: ",drop_x_mm, f", drop y: ", drop_y_mm)
+
+
+    if drop_y_mm is None or drop_x_mm is None:
+        searchattempts += 1
+        # Drop zone not visible — rotate in place to search
+        print("Drop zone not visible → searching...")
+       
+        if searchattempts >= 30: #if robot has tried searching 4 times in a row it needs to move
+            move_forward()
+            if obstacle_detected(frame):
+                avoid_obstacle()
+            searchattempts = 0
+        else:
+            turn_left()
+            time.sleep(0.5)
+            stop()
+    
+    elif drop_y_mm >= 5:
         turn_right()
     elif drop_y_mm <= -5:
         turn_left()
@@ -171,20 +180,6 @@ def navigate_to_drop_state(frame_left, frame_right):
     elif drop_y_mm <= 5 and drop_y_mm >= -5 and drop_x_mm <= DROP_ZONE_TARGET_DIST_MAX and drop_x_mm >= DROP_ZONE_TARGET_DIST_MIN:
         stop()
         return DROP
-    else:
-        searchattempts += 1
-        # Drop zone not visible — rotate in place to search
-        print("Drop zone not visible → searching...")
-       
-        if searchattempts >= 4: #if robot has tried searching 4 times in a row it needs to move
-            move_forward()
-            if obstacle_detected(frame_left):
-                avoid_obstacle()
-            searchattempts = 0
-        else:
-            turn_left()
-            time.sleep(2.5)
-            stop()
 
     return NAVIGATE_TO_DROP
 
@@ -194,7 +189,7 @@ def drop_state():
     stop()
 
     m.lift(-0.4)  # down speed
-    time.sleep(2)
+    time.sleep(0.4)
     m.lift(0)    # stop lift
 
 
@@ -219,21 +214,15 @@ def drop_state():
 
 
 # Main loop
-def main_loop(camera_left, camera_right):
+def main_loop():
     global state, previous_state
 
-
     while True:
-        ret_l, frame_left = camera_left.read()
-        ret_r, frame_right = camera_right.read()
-
-
-        if not ret_l or not ret_r:
-            continue
-
+        frame_left, frame_right = cam.get_frames()
+        frametup = (frame_left, frame_right)
 
         # --- PRIORITY OVERRIDE ---
-        if obstacle_detected(frame_left):
+        if obstacle_detected(frametup[0]):
             previous_state = state
             avoid_obstacle()
             continue
@@ -241,7 +230,7 @@ def main_loop(camera_left, camera_right):
 
         # --- FSM EXECUTION ---
         if state == SEARCH:
-            state = search_state(frame_left, frame_right)
+            state = search_state(frametup[0],frametup[1])
 
 
         elif state == PICKUP:
@@ -249,7 +238,7 @@ def main_loop(camera_left, camera_right):
 
 
         elif state == NAVIGATE_TO_DROP:
-            state = navigate_to_drop_state(frame_left)
+            state = navigate_to_drop_state(frametup[0],frametup[1])
 
 
         elif state == DROP:
@@ -263,12 +252,17 @@ def main_loop(camera_left, camera_right):
 
         time.sleep(0.05)
 
-move_forward()
-time.sleep(2)
-move_backward()
-time.sleep(2)
-turn_left()
-time.sleep(2)
-turn_right()
-time.sleep(2)
-stop()
+# move_forward()
+# time.sleep(2)
+# move_backward()
+# time.sleep(2)
+# turn_left()
+# time.sleep(2)
+# turn_right()
+# time.sleep(2)
+# stop()
+
+
+# 570 and 30 (x,y) values for pickup
+
+main_loop()

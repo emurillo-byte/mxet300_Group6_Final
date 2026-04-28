@@ -53,25 +53,28 @@ if __name__ == "__main__":
         # sendLeft(0.8)
         # sendRight(0.8)
         # time.sleep(4)                       # run fwd for 4 seconds
-        # print("motors.py: driving reverse")
-        # sendLeft(-0.8)
-        # sendRight(-0.8)
-        # time.sleep(4)                       # run reverse for 4 seconds
+        print("motors.py: driving reverse")
+        sendLeft(-0.8)
+        sendRight(-0.8)
+        time.sleep(4)                       # run reverse for 4 seconds
         
-        print("motors.py: lift up")
-        lift(0.4)
-        time.sleep(2)
+        # print("motors.py: lift up")
+        # lift(0.6)           # 0.6 for lifting the block
+        # time.sleep(0.5)     # 0.5
+
+        # print("stopping motors 4 seconds")
+        # sendLeft(0)
+        # sendRight(0)
+        # lift(0)
+        # time.sleep(3)
+        
+        # print("motors.py: lift down")
+        # lift(-0.4)          # -0.4 for lowering the block
+        # time.sleep(0.4)     # 0.4 
+
 
         print("stopping motors 4 seconds")
-        sendLeft(0)
-        sendRight(0)
-        lift(0)
-        time.sleep(3)
-        
-        print("motors.py: lift down")
-        lift(-0.4)
-        time.sleep(0.5)
-        print("stopping motors 4 seconds")
+
         sendLeft(0)
         sendRight(0)
         lift(0)

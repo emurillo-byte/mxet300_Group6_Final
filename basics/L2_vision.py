@@ -3,7 +3,7 @@ import numpy as np
 
 # --- STEREO CALIBRATION CONSTANTS ---
 # You must calibrate these for your specific cameras!
-BASELINE_MM = 225.0  # Distance between the two camera lenses in mm
+BASELINE_MM = 130.0  # Distance between the two camera lenses in mm
 FOCAL_LENGTH_PIXELS = 350.0  # Estimated. Requires camera calibration to get exact number.
 
 # HSV Filter Ranges for Calibration
@@ -21,6 +21,7 @@ HSV_FILTERS = {
         "upper": np.array([45, 90, 255]),
     },
 }
+
 # Background subtractor for dynamic obstacles
 bg_subtractor = cv2.createBackgroundSubtractorMOG2(history=50, varThreshold=50, detectShadows=False)
 
@@ -78,7 +79,7 @@ def find_target_object(frame):
         frame, 
         HSV_FILTERS["target_object"]["lower"], 
         HSV_FILTERS["target_object"]["upper"], 
-        min_area=800
+        min_area=400
     )
 
 def find_target_area(frame):
@@ -89,13 +90,37 @@ def find_target_area(frame):
         min_area=1500
     )
 
+
 # Alias to keep compatibility with older scripts that might still use the old name
 find_landing_zone = find_target_area
 
 # --- HAZARD DETECTION ---
+
+def detect_yellow_obstacle(frame):
+    h, w = frame.shape[:2]
+    
+    # Calculate the horizontal crop boundaries
+    left_bound = int(w * 0.25)
+    right_bound = int(w * 0.75)
+    
+    # Crop the frame: keep all height (:), crop width to middle 50%
+    middle_section = frame[:, left_bound:right_bound]
+    
+    center = find_color_center(
+        middle_section, 
+        HSV_FILTERS["yellow_tape"]["lower"], 
+        HSV_FILTERS["yellow_tape"]["upper"], 
+        min_area=1000
+    )
+    
+    if center is not None:
+        return True
+        
+    return False
+
 def detect_yellow_tape(frame):
     """
-    Looks for a large yellow blob, but ONLY in the bottom 40% of the camera view
+    Looks for a large yellow blob, but ONLY in the bottom 15% of the camera view
     where the floor actually is.
     """
     h, w = frame.shape[:2]
@@ -112,13 +137,13 @@ def detect_yellow_tape(frame):
         return True
     return False
 
-def detect_dynamic_obstacles(frame):
-    fg_mask = bg_subtractor.apply(frame)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
-    if cv2.countNonZero(fg_mask) > 5000: 
-        return True
-    return False
+# def detect_dynamic_obstacles(frame):
+#     fg_mask = bg_subtractor.apply(frame)
+#     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+#     fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
+#     if cv2.countNonZero(fg_mask) > 5000: 
+#         return True
+#     return False
 
 def detect_static_obstacles(frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
