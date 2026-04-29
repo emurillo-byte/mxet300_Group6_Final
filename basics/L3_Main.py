@@ -55,7 +55,7 @@ def stop():
     m.sendLeft(0)
     m.sendRight(0)
     print("Stopping")
-    
+
 
 # TOP PRIORITY - Obstacle Handling
 def obstacle_detected(f_left): #true if object or false if no object, !!! has bias towards left camera
@@ -218,8 +218,7 @@ def drop_state():
 
     move_backward()
     time.sleep(2)
-    turn_right()
-    time.sleep(3)   # time taken to make a u-turn
+    
 
     obj_left -= 1
 
