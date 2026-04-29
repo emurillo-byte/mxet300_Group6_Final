@@ -14,7 +14,7 @@ IDLE = 5
 cam = L1_camera.StereoCamera()
 
 searchattempts = 0
-state = SEARCH
+state = NAVIGATE_TO_DROP
 previous_state = SEARCH
 move_counter = 0
 
@@ -22,7 +22,8 @@ move_counter = 0
 PICK_DIST_MAX = 700          # mm distance to stop at for pickup
 PICK_DIST_MIN = 500        # mm distance to stop at for pickup
 
-DROP_ZONE_TARGET_DIST_MAX = 150 #mm distance to stop at for dropoff
+DROP_ZONE_TARGET_DIST_MAX = 500 #mm distance to stop at for dropoff
+DROP_ZONE_TARGET_DIST_MIN = 700 #mm distance to stop at for dropoff
 
 
 # Low level motor functions (replace with L1.py later)
@@ -95,7 +96,7 @@ def search_state(f_left,f_right):
        
         print("Search Attempts:", searchattempts),
 
-        if searchattempts >= 30: #if robot has tried searching 4 times in a row it needs to move
+        if searchattempts >= 18: #if robot has tried searching 4 times in a row it needs to move
             for move_counter in range(30):
                 move_forward()
                 if obstacle_detected(f_left):
@@ -157,27 +158,39 @@ def navigate_to_drop_state(f_left,f_right):
         searchattempts += 1
         # Drop zone not visible — rotate in place to search
         print("Drop zone not visible → searching...")
-       
-        if searchattempts >= 30: #if robot has tried searching 4 times in a row it needs to move
-            move_forward()
-            if obstacle_detected(frame):
-                avoid_obstacle()
+        print("Search Attempts:", searchattempts),
+
+        if searchattempts >= 18: #if robot has tried searching 4 times in a row it needs to move
+            for move_counter in range(30):
+                move_forward()
+                if obstacle_detected(f_left):
+                    avoid_obstacle()
+                move_counter +=1
+                time.sleep(0.1)
             searchattempts = 0
+            move_counter = 0
         else:
             turn_left()
             time.sleep(0.5)
             stop()
+            time.sleep(0.3)
     
-    elif drop_y_mm >= 5:
-        turn_right()
-    elif drop_y_mm <= -5:
-        turn_left()
+    elif drop_y_mm >= 70:
+        turn_right(0.03)
+        time.sleep(0.05)
+        stop()
+        time.sleep(0.05)
+    elif drop_y_mm <= 40:
+        turn_left(0.03)
+        time.sleep(0.05)
+        stop()
+        time.sleep(0.05)
 
-    elif drop_x_mm > DROP_ZONE_TARGET_DIST_MAX :
+    elif drop_x_mm > DROP_ZONE_TARGET_DIST_MAX:
         move_forward()
     elif drop_x_mm < DROP_ZONE_TARGET_DIST_MIN:
         move_backward()
-    elif drop_y_mm <= 5 and drop_y_mm >= -5 and drop_x_mm <= DROP_ZONE_TARGET_DIST_MAX and drop_x_mm >= DROP_ZONE_TARGET_DIST_MIN:
+    elif drop_y_mm <=70 and drop_y_mm >= 40 and drop_x_mm <= DROP_ZONE_TARGET_DIST_MAX and drop_x_mm >= DROP_ZONE_TARGET_DIST_MIN:
         stop()
         return DROP
 

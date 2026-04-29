@@ -9,15 +9,15 @@ FOCAL_LENGTH_PIXELS = 350.0  # Estimated. Requires camera calibration to get exa
 # HSV Filter Ranges for Calibration
 HSV_FILTERS = {
     "target_object": {
-        "lower": np.array([130, 20, 255]),  # Example range for red
+        "lower": np.array([130, 20, 255]), 
         "upper": np.array([170, 100, 255]),
     },
     "target_area": {
-        "lower": np.array([47, 47, 200]),  # Example range for blue
+        "lower": np.array([45, 45, 190]), 
         "upper": np.array([86, 145, 255]),
     },
     "yellow_tape": {
-        "lower": np.array([20, 37, 170]),  # Example range for yellow
+        "lower": np.array([20, 37, 170]),
         "upper": np.array([45, 90, 255]),
     },
 }
@@ -87,7 +87,7 @@ def find_target_area(frame):
         frame, 
         HSV_FILTERS["target_area"]["lower"], 
         HSV_FILTERS["target_area"]["upper"], 
-        min_area=1500
+        min_area=800
     )
 
 
