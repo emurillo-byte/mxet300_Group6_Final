@@ -55,15 +55,7 @@ def stop():
     m.sendLeft(0)
     m.sendRight(0)
     print("Stopping")
-
-
-# Forklift logic placeholders
-def lower_fork():
-    print("Lowering fork")
-
-
-def lift_fork():
-    print("Lifting fork")
+    
 
 # TOP PRIORITY - Obstacle Handling
 def obstacle_detected(f_left): #true if object or false if no object, !!! has bias towards left camera
@@ -139,9 +131,18 @@ def pickup_state():
     stop()
     
     print("Picking up object")
+    # pulses the lift to pick up the object reliably
     m.lift(0.7)  # up speed
-    time.sleep(0.5)
-    m.lift(0)    # stop lift
+    time.sleep(0.2)
+    m.lift(0)
+    time.sleep(0.2)
+    m.lift(0.7)
+    time.sleep(0.2)
+    m.lift(0)
+    time.sleep(0.2)
+    m.lift(0.7)
+    time.sleep(0.2)
+    m.lift(0)
 
     return NAVIGATE_TO_DROP
 
@@ -200,10 +201,19 @@ def navigate_to_drop_state(f_left,f_right):
 def drop_state():
     print("Dropping object")
     stop()
-
+    
+    # pulses the lift to drop the object reliably
     m.lift(-0.4)  # down speed
-    time.sleep(0.4)
+    time.sleep(0.2)
     m.lift(0)    # stop lift
+    time.sleep(0.2)
+    m.lift(-0.4)
+    time.sleep(0.2)
+    m.lift(0)
+    time.sleep(0.2)
+    m.lift(-0.4)
+    time.sleep(0.2)
+    m.lift(0)
 
 
     move_backward()
