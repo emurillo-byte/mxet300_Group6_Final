@@ -13,17 +13,21 @@ IDLE = 5
 
 cam = L1_camera.StereoCamera()
 
+# Variables
 searchattempts = 0
 state = NAVIGATE_TO_DROP
 previous_state = SEARCH
 move_counter = 0
 
-# Parameters
-PICK_DIST_MAX = 700          # mm distance to stop at for pickup
-PICK_DIST_MIN = 500        # mm distance to stop at for pickup
 
-DROP_ZONE_TARGET_DIST_MAX = 500 #mm distance to stop at for dropoff
-DROP_ZONE_TARGET_DIST_MIN = 700 #mm distance to stop at for dropoff
+# Parameters
+PICK_DIST_MAX = 200         # mm distance to stop at for pickup
+PICK_DIST_MIN = 50        # mm distance to stop at for pickup
+
+DROP_ZONE_TARGET_DIST_MAX = 200  #mm distance to stop at for dropoff
+DROP_ZONE_TARGET_DIST_MIN = 50 #mm distance to stop at for dropoff
+
+obj_left = 1 #number of objects to pick up and drop off, state machine goes IDLE when done
 
 
 # Low level motor functions (replace with L1.py later)
@@ -125,10 +129,6 @@ def search_state(f_left,f_right):
 
 # State 2: PICKUP
 def pickup_state():
-    
-    move_forward()
-    time.sleep(2)
-    stop()
     
     print("Picking up object")
     # pulses the lift to pick up the object reliably
